@@ -1,222 +1,261 @@
-import streamlit as st
-import time
-import os
-from gtts import gTTS
-from io import BytesIO
-
-# --- 0. 系統配置 ---
-st.set_page_config(page_title="Unit 3: O loma' no mako", page_icon="🏠", layout="centered")
-
-# CSS 優化 (卡片與按鈕樣式)
-st.markdown("""
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPF GL 係數計算器</title>
     <style>
-    .stButton>button {
-        width: 100%;
-        border-radius: 20px;
-        font-size: 24px;
-        background-color: #FFD700;
-        color: #333;
-        border: none;
-        padding: 10px;
-        margin-top: 10px;
-    }
-    .stButton>button:hover {
-        background-color: #FFC107;
-        transform: scale(1.02);
-    }
-    .big-font {
-        font-size: 40px !important;
-        font-weight: bold;
-        color: #2E86C1;
-        text-align: center;
-        margin-bottom: 5px;
-    }
-    .med-font {
-        font-size: 22px !important;
-        color: #555;
-        text-align: center;
-        margin-bottom: 10px;
-    }
-    .card {
-        background-color: #f0f2f6;
-        padding: 20px;
-        border-radius: 15px;
-        text-align: center;
-        margin-bottom: 20px;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-    }
+        /* CSS 樣式設計 - 讓介面看起來簡潔現代 */
+        :root {
+            --primary-color: #0056b3;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: #333;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        input[type="number"], select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box; /* 重要：讓 padding 不會撐破寬度 */
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="number"]:focus, select:focus {
+            border-color: var(--primary-color);
+            outline: none;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .radio-label {
+            display: flex;
+            align-items: center;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
+        .radio-label input {
+            margin-right: 8px;
+        }
+
+        .section-title {
+            font-size: 1.1em;
+            color: var(--primary-color);
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 5px;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #004494;
+        }
+
+        #result-area {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #eef6fc;
+            border-radius: 10px;
+            text-align: center;
+            display: none; /* 預設隱藏 */
+        }
+
+        .result-label {
+            font-size: 1em;
+            color: #666;
+        }
+
+        .result-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin: 10px 0;
+        }
+        
+        .total-weight {
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 5px;
+        }
     </style>
-    """, unsafe_allow_html=True)
+</head>
+<body>
 
-# --- 1. 數據資料庫 (Unit 3 專屬) ---
+<div class="container">
+    <h1>🏋️‍♂️ IPF GL 計算器</h1>
 
-# 單字：家庭成員
-VOCABULARY = {
-    "Wama":     {"zh": "爸爸", "emoji": "👨", "file": "u3_wama"},
-    "Wina":     {"zh": "媽媽", "emoji": "👩", "file": "u3_wina"},
-    "Akong":    {"zh": "阿公", "emoji": "👴", "file": "u3_akong"},
-    "Ama":      {"zh": "阿嬤", "emoji": "👵", "file": "u3_ama"},
-    "Kaka":     {"zh": "哥哥/姊姊", "emoji": "👦", "file": "u3_kaka"},
-    "Safa":     {"zh": "弟弟/妹妹", "emoji": "👶", "file": "u3_safa"}
-}
+    <div class="form-group">
+        <label>基本設定</label>
+        <div class="radio-group">
+            <label class="radio-label"><input type="radio" name="gender" value="female" checked> 女生</label>
+            <label class="radio-label"><input type="radio" name="gender" value="male"> 男生</label>
+        </div>
+        <div class="radio-group">
+            <label class="radio-label"><input type="radio" name="equipment" value="raw" checked> 無裝備 (Raw)</label>
+            <label class="radio-label"><input type="radio" name="equipment" value="equipped"> 有裝備 (Equipped)</label>
+        </div>
+        <div class="radio-group" style="margin-top:10px;">
+             <label class="radio-label"><input type="radio" name="unit" value="kg" checked> 公斤 (kg)</label>
+             <label class="radio-label"><input type="radio" name="unit" value="lbs"> 英磅 (lbs)</label>
+        </div>
+    </div>
 
-# 句型：結合動作 (Unit 2) + 人物 (Unit 3)
-SENTENCES = [
-    {"amis": "Romadiw ci Wina.", "zh": "媽媽在唱歌。", "file": "u3_s_mom_sings"},
-    {"amis": "Mafoti' ci Akong.", "zh": "阿公在睡覺。", "file": "u3_s_grandpa_sleeps"},
-    {"amis": "Cima ko romadiway?", "zh": "誰在唱歌？", "file": "u3_q_who_sings"}
-]
+    <div class="form-group">
+        <label for="bodyweight">體重</label>
+        <input type="number" id="bodyweight" placeholder="輸入體重" step="0.1">
+    </div>
 
-# --- 1.5 智慧語音核心 ---
-def play_audio(text, filename_base=None):
-    # 優先檢查是否有預錄的音檔
-    if filename_base:
-        path_m4a = f"audio/{filename_base}.m4a"
-        if os.path.exists(path_m4a):
-            st.audio(path_m4a, format='audio/mp4')
-            return
-        path_mp3 = f"audio/{filename_base}.mp3"
-        if os.path.exists(path_mp3):
-            st.audio(path_mp3, format='audio/mp3')
-            return
+    <div class="section-title">三項成績</div>
 
-    # 如果沒有檔案，使用 Google小姐 (印尼語腔調模擬)
-    try:
-        tts = gTTS(text=text, lang='id')
-        fp = BytesIO()
-        tts.write_to_fp(fp)
-        fp.seek(0)
-        st.audio(fp, format='audio/mp3')
-    except:
-        st.caption("🔇 (無聲)")
+    <div class="form-group">
+        <label for="squat">深蹲 (Squat)</label>
+        <input type="number" id="squat" placeholder="0" step="0.5">
+    </div>
 
-# --- 2. 狀態管理 ---
-if 'score' not in st.session_state:
-    st.session_state.score = 0
-if 'current_q' not in st.session_state:
-    st.session_state.current_q = 0
+    <div class="form-group">
+        <label for="bench">臥推 (Bench Press)</label>
+        <input type="number" id="bench" placeholder="0" step="0.5">
+    </div>
 
-# --- 3. 學習模式 (Learning Mode) ---
-def show_learning_mode():
-    st.markdown("<h2 style='text-align: center;'>Sakatoolo: O loma' no mako</h2>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align: center; color: gray;'>我的家庭 🏠</h4>", unsafe_allow_html=True)
-    
-    # 顯示單字卡
-    col1, col2 = st.columns(2)
-    words = list(VOCABULARY.items())
-    
-    for idx, (amis, data) in enumerate(words):
-        with (col1 if idx % 2 == 0 else col2):
-            with st.container():
-                st.markdown(f"""
-                <div class="card">
-                    <div style="font-size: 60px;">{data['emoji']}</div>
-                    <div class="big-font">{amis}</div>
-                    <div class="med-font">{data['zh']}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                play_audio(amis, filename_base=data.get('file'))
+    <div class="form-group">
+        <label for="deadlift">硬舉 (Deadlift)</label>
+        <input type="number" id="deadlift" placeholder="0" step="0.5">
+    </div>
 
-    st.markdown("---")
-    st.markdown("### 🗣️ 句型練習：誰在做什麼？")
-    
-    # 句子 1
-    s1 = SENTENCES[0]
-    st.info(f"🔹 {s1['amis']}")
-    st.caption(f"({s1['zh']})")
-    play_audio(s1['amis'], filename_base=s1.get('file'))
-    
-    # 句子 2
-    s2 = SENTENCES[1]
-    st.info(f"🔹 {s2['amis']}")
-    st.caption(f"({s2['zh']})")
-    play_audio(s2['amis'], filename_base=s2.get('file'))
-    
-    # 問答
-    st.markdown("#### ❓ 問答練習")
-    q = SENTENCES[2]
-    st.success(f"Q: {q['amis']} ({q['zh']})")
-    play_audio(q['amis'], filename_base=q.get('file'))
-    
-    st.warning("A: Ci Wina. (是媽媽。)")
-    play_audio("Ci Wina", filename_base="u3_wina")
+    <button onclick="calculateGL()">計算 IPF GL 分數</button>
 
-# --- 4. 測驗模式 (Quiz Mode) ---
-def show_quiz_mode():
-    st.markdown("<h2 style='text-align: center;'>🎮 家庭小偵探</h2>", unsafe_allow_html=True)
-    progress = st.progress(st.session_state.current_q / 3)
-    
-    # 第一關：單字聽力
-    if st.session_state.current_q == 0:
-        st.markdown("### 第一關：這是誰？")
-        st.write("請聽聲音：")
-        play_audio("Akong", filename_base="u3_akong")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("👴 阿公"):
-                st.balloons()
-                st.success("答對了！ Akong!")
-                time.sleep(1)
-                st.session_state.score += 100
-                st.session_state.current_q += 1
-                st.rerun()
-        with c2:
-            if st.button("👵 阿嬤"): st.error("那是 Ama 喔！")
+    <div id="result-area">
+        <div class="total-weight">總和: <span id="totalWeightDisplay">0</span> kg</div>
+        <div class="result-label">IPF GL Points</div>
+        <div class="result-value" id="glScoreDisplay">0.00</div>
+    </div>
+</div>
 
-    # 第二關：句子理解
-    elif st.session_state.current_q == 1:
-        st.markdown("### 第二關：誰在唱歌？")
-        st.markdown("#### 請聽句子：")
-        play_audio("Romadiw ci Wina.", filename_base="u3_s_mom_sings")
-        
-        st.write("請問句子裡是誰在唱歌？")
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("👩 媽媽"):
-                st.snow()
-                st.success("沒錯！ Romadiw ci Wina.")
-                time.sleep(1)
-                st.session_state.score += 100
-                st.session_state.current_q += 1
-                st.rerun()
-        with c2:
-            if st.button("👶 妹妹"): st.error("不對喔！")
+<script>
+    // JavaScript 計算邏輯
 
-    # 第三關：問答
-    elif st.session_state.current_q == 2:
-        st.markdown("### 第三關：看圖回答")
-        st.markdown("#### Q: Cima ko mafoti'ay? (誰在睡覺？)")
-        play_audio("Cima ko mafoti'ay?", filename_base="u3_q_who_sleeps") # 模擬問句
-        
-        st.markdown("<div style='font-size:80px; text-align:center;'>👴💤</div>", unsafe_allow_html=True)
-        
-        options = ["Ci Wama (是爸爸)", "Ci Akong (是阿公)", "Ci Safa (是弟弟)"]
-        choice = st.radio("請選擇：", options)
-        
-        if st.button("確定送出"):
-            if "Akong" in choice:
-                st.balloons()
-                st.success("太厲害了！全部答對！")
-                time.sleep(1)
-                st.session_state.score += 100
-                st.session_state.current_q += 1
-                st.rerun()
-            else:
-                st.error("再看一次圖片喔！")
+    // IPF GL 官方係數表 (資料來源：IPF Technical Rules Book)
+    const COEFFICIENTS = {
+        male: {
+            raw: { A: 1199.72839, B: 1030.90069, C: 0.0092155 },
+            equipped: { A: 1236.61249, B: 990.26461, C: 0.0118756 }
+        },
+        female: {
+            raw: { A: 610.32796, B: 1045.59282, C: 0.0304889 },
+            equipped: { A: 758.63878, B: 949.31382, C: 0.0243547 }
+        }
+    };
 
-    else:
-        st.markdown(f"<div style='text-align: center;'><h1>🏆 挑戰完成！</h1><h2>得分：{st.session_state.score}</h2></div>", unsafe_allow_html=True)
-        if st.button("再玩一次"):
-            st.session_state.current_q = 0
-            st.session_state.score = 0
-            st.rerun()
+    function calculateGL() {
+        // 1. 獲取輸入值
+        const gender = document.querySelector('input[name="gender"]:checked').value;
+        const equipment = document.querySelector('input[name="equipment"]:checked').value;
+        const unit = document.querySelector('input[name="unit"]:checked').value;
 
-# --- 5. 主程式入口 ---
-st.sidebar.title("Unit 3: O loma' 🏠")
-mode = st.sidebar.radio("選擇模式", ["📖 學習單詞", "🎮 練習挑戰"])
+        let bw = parseFloat(document.getElementById('bodyweight').value) || 0;
+        let s = parseFloat(document.getElementById('squat').value) || 0;
+        let b = parseFloat(document.getElementById('bench').value) || 0;
+        let d = parseFloat(document.getElementById('deadlift').value) || 0;
 
-if mode == "📖 學習單詞":
-    show_learning_mode()
-else:
-    show_quiz_mode()
+        // 2. 基本驗證
+        if (bw <= 0) {
+            alert("請輸入有效的體重！");
+            return;
+        }
+        if (s === 0 && b === 0 && d === 0) {
+             alert("請至少輸入一項成績！");
+             return;
+        }
+
+        // 3. 單位轉換 (如果選擇lbs，全部轉為kg進行計算)
+        if (unit === 'lbs') {
+            bw = bw * 0.45359237;
+            s = s * 0.45359237;
+            b = b * 0.45359237;
+            d = d * 0.45359237;
+        }
+
+        // 4. 計算總和
+        const total = s + b + d;
+
+        // 5. 獲取對應的係數
+        const coeff = COEFFICIENTS[gender][equipment];
+
+        // 6. 核心公式計算 (IPF GL Formula)
+        // Points = Total * 100 / ( A - B * e^(-C * Bodyweight) )
+        const denominator = coeff.A - coeff.B * Math.exp(-coeff.C * bw);
+        let glScore = (total * 100) / denominator;
+
+        // 7. 顯示結果
+        const resultArea = document.getElementById('result-area');
+        const totalDisplay = document.getElementById('totalWeightDisplay');
+        const scoreDisplay = document.getElementById('glScoreDisplay');
+
+        resultArea.style.display = 'block'; // 顯示結果區域
+        // 總和顯示小數點後1位 (例如 225.0 或 225.5)
+        totalDisplay.textContent = total.toFixed(1); 
+        // 分數顯示小數點後2位
+        scoreDisplay.textContent = glScore.toFixed(2);
+
+        // 滾動到結果區
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+</script>
+
+</body>
+</html>
